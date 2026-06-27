@@ -99,7 +99,7 @@ app.get('/api/qr', (req, res) => {
 
 // Send captured photo order and notes
 app.post('/api/send-order', async (req, res) => {
-  const { phone, notes, photoData, orderId } = req.body;
+  const { phone, notes, photoData, orderId, caption } = req.body;
 
   if (clientStatus !== 'ready') {
     return res.status(503).json({ 
@@ -138,16 +138,18 @@ app.post('/api/send-order', async (req, res) => {
     const media = new MessageMedia(mimeType, base64Data, filename);
 
     // 3. Format message caption
-    const caption = `*📦 New Photo Order Placed*\n\n` +
-                    `*Order ID:* ${orderId || `ORD-${Math.floor(1000 + Math.random() * 9000)}`}\n` +
-                    `*Date:* ${new Date().toLocaleString()}\n` +
-                    `${notes ? `*Notes:* ${notes}` : ''}\n\n` +
-                    `_Sent via Antigravity OrderHub_`;
+    const defaultCaption = `*📦 New Photo Order Placed*\n\n` +
+                           `*Order ID:* ${orderId || `ORD-${Math.floor(1000 + Math.random() * 9000)}`}\n` +
+                           `*Date:* ${new Date().toLocaleString()}\n` +
+                           `${notes ? `*Notes:* ${notes}` : ''}\n\n` +
+                           `_Sent via Antigravity OrderHub_`;
+
+    const finalCaption = caption || defaultCaption;
 
     console.log(`Sending order photo to ${formattedRecipient}...`);
     
     // 4. Send media via whatsapp-web.js
-    const msg = await client.sendMessage(formattedRecipient, media, { caption });
+    const msg = await client.sendMessage(formattedRecipient, media, { caption: finalCaption });
     
     console.log(`Order sent successfully! Message ID: ${msg.id.id}`);
     res.json({ 
