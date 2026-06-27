@@ -3,6 +3,7 @@ import { CameraCapture } from './components/CameraCapture';
 import { OrderForm } from './components/OrderForm';
 import { HistoryDashboard } from './components/HistoryDashboard';
 import { DistributorPortal } from './components/DistributorPortal';
+import { WhatsAppAuth } from './components/WhatsAppAuth';
 import { 
   getOrders, 
   getDistributors, 
@@ -13,6 +14,8 @@ import {
 import type { Order, Distributor } from './types';
 import { Package, User, Landmark, Zap } from 'lucide-react';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
 function App() {
   const [activeView, setActiveView] = useState<'sender' | 'distributor'>('sender');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -21,10 +24,37 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
 
-  // Load orders and distributors on mount
+  // WhatsApp integration states
+  const [waStatus, setWaStatus] = useState<'loading' | 'qr' | 'ready' | 'disconnected'>('loading');
+  const [waQrCode, setWaQrCode] = useState<string | null>(null);
+
+  // Load orders and distributors, and poll WhatsApp status
   useEffect(() => {
     setOrders(getOrders());
     setDistributors(getDistributors());
+
+    const checkWhatsAppStatus = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/status`);
+        const data = await res.json();
+        setWaStatus(data.status);
+
+        if (data.status === 'qr') {
+          const qrRes = await fetch(`${BACKEND_URL}/api/qr`);
+          const qrData = await qrRes.json();
+          setWaQrCode(qrData.qrCode);
+        } else {
+          setWaQrCode(null);
+        }
+      } catch (err) {
+        setWaStatus('disconnected');
+        setWaQrCode(null);
+      }
+    };
+
+    checkWhatsAppStatus();
+    const interval = setInterval(checkWhatsAppStatus, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   // Show a visual notification toast
@@ -35,7 +65,7 @@ function App() {
     }, 4000);
   };
 
-  // Retailer places an order (client-side native sharing and desktop clipboard copy fallback)
+  // Retailer places an order (local simulation + WhatsApp integration if linked)
   const handlePlaceOrder = async (orderData: {
     distributorId: string;
     notes: string;
@@ -48,7 +78,7 @@ function App() {
     const distName = distributors.find(d => d.id === orderData.distributorId)?.name || 'Distributor';
     const orderId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // 1. Add order to local history (for timeline dashboard simulation)
+    // 1. Save locally for timeline simulation
     const newOrder: Order = {
       id: orderId,
       photoData: selectedPhoto,
@@ -72,63 +102,39 @@ function App() {
     setOrders(getOrders());
     setSelectedPhoto(null);
 
-    // Prepare WhatsApp Message Caption
-    const caption = `*📦 New Photo Order Placed*\n\n` +
-                    `*Order ID:* ${orderId}\n` +
-                    `*Date:* ${new Date().toLocaleString()}\n` +
-                    `${orderData.notes ? `*Extra Note:* ${orderData.notes}` : ''}\n\n` +
-                    `_Sent via OrderHub_`;
-
-    const cleanPhone = orderData.phone.replace(/\D/g, '');
-
-    // 2. Share Flow
-    try {
-      const res = await fetch(selectedPhoto);
-      const blob = await res.blob();
-      const file = new File([blob], `order_${orderId}.jpg`, { type: blob.type });
-
-      // Check if Web Share API is supported for files (mobile Safari/Chrome)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          text: caption,
-          title: `Order ${orderId}`
-        });
-        triggerNotification(`Order ${orderId} sent to share menu!`, 'success');
-      } else {
-        throw new Error("Sharing files not supported by this browser.");
-      }
-    } catch (shareErr) {
-      console.warn("Native Web Share failed/unsupported. Falling back to Clipboard + Chat Link.", shareErr);
-      
-      // Fallback: Copy to Clipboard and Open WhatsApp Link
-      let copied = false;
+    // 2. Deliver via WhatsApp Web client API if ready
+    let waSent = false;
+    if (waStatus === 'ready') {
       try {
-        const res = await fetch(selectedPhoto);
-        const blob = await res.blob();
-        
-        // Write file blob to Clipboard
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            [blob.type]: blob
+        const res = await fetch(`${BACKEND_URL}/api/send-order`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            phone: orderData.phone,
+            notes: orderData.notes,
+            photoData: selectedPhoto,
+            orderId: orderId
           })
-        ]);
-        copied = true;
-      } catch (clipErr) {
-        console.error("Clipboard API failed:", clipErr);
+        });
+        const apiData = await res.json();
+        if (apiData.success) {
+          waSent = true;
+        } else {
+          console.warn('WhatsApp API error:', apiData.message);
+        }
+      } catch (err) {
+        console.error('Error sending order photo to WhatsApp backend:', err);
       }
+    }
 
-      // Open WhatsApp chat in a new tab
-      const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(caption)}`;
-      window.open(whatsappUrl, '_blank');
+    setIsSubmitting(false);
 
-      if (copied) {
-        triggerNotification(`Order sheet COPIED! Paste (Ctrl+V) it in the opened WhatsApp chat.`, 'success');
-      } else {
-        triggerNotification(`Opened WhatsApp chat. (Copy & paste image manually on this browser)`, 'info');
-      }
-    } finally {
-      setIsSubmitting(false);
+    if (waSent) {
+      triggerNotification(`Order ${orderId} successfully sent to ${distName} via WhatsApp!`, 'success');
+    } else {
+      triggerNotification(`Order ${orderId} saved locally (WhatsApp offline/not linked).`, 'info');
     }
   };
 
@@ -252,7 +258,19 @@ function App() {
       <main>
         {activeView === 'sender' ? (
           // Retailer Dashboard Screen
-          <div className="main-grid">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <WhatsAppAuth 
+              status={waStatus}
+              qrCode={waQrCode}
+              onRefresh={async () => {
+                setWaStatus('loading');
+                try {
+                  await fetch(`${BACKEND_URL}/api/status`);
+                } catch(e) {}
+              }}
+            />
+            
+            <div className="main-grid">
             {/* Left Column: Form & Capture */}
             <div className="column">
               <CameraCapture 
@@ -279,6 +297,7 @@ function App() {
               />
             </div>
           </div>
+        </div>
         ) : (
           // Distributor portal screen
           <DistributorPortal 
