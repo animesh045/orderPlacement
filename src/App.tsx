@@ -25,8 +25,8 @@ function App() {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
 
   // WhatsApp integration states
-  const [waStatus, setWaStatus] = useState<'loading' | 'qr' | 'ready' | 'disconnected'>('loading');
-  const [waQrCode, setWaQrCode] = useState<string | null>(null);
+  const [waStatus, setWaStatus] = useState<'loading' | 'ready' | 'disconnected'>('loading');
+  const [waMode, setWaMode] = useState<'official' | 'simulation'>('simulation');
 
   // Load orders and distributors, and poll WhatsApp status
   useEffect(() => {
@@ -38,17 +38,10 @@ function App() {
         const res = await fetch(`${BACKEND_URL}/api/status`);
         const data = await res.json();
         setWaStatus(data.status);
-
-        if (data.status === 'qr') {
-          const qrRes = await fetch(`${BACKEND_URL}/api/qr`);
-          const qrData = await qrRes.json();
-          setWaQrCode(qrData.qrCode);
-        } else {
-          setWaQrCode(null);
-        }
+        setWaMode(data.mode || 'simulation');
       } catch (err) {
         setWaStatus('disconnected');
-        setWaQrCode(null);
+        setWaMode('simulation');
       }
     };
 
@@ -261,13 +254,7 @@ function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <WhatsAppAuth 
               status={waStatus}
-              qrCode={waQrCode}
-              onRefresh={async () => {
-                setWaStatus('loading');
-                try {
-                  await fetch(`${BACKEND_URL}/api/status`);
-                } catch(e) {}
-              }}
+              mode={waMode}
             />
             
             <div className="main-grid">
