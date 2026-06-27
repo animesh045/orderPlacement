@@ -6,9 +6,11 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const app = express();
 const PORT = 3001;
 
-// Allow CORS from our Vite dev server
+// Allow CORS from our frontend (development or deployed Vercel URL)
+const corsOrigin = process.env.FRONTEND_URL || '*';
 app.use(cors({
-  origin: 'http://localhost:5173'
+  origin: corsOrigin === '*' ? '*' : corsOrigin.split(','),
+  credentials: true
 }));
 
 // Set body size limit to accommodate large Base64 images

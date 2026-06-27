@@ -14,6 +14,8 @@ import {
 import type { Order, Distributor } from './types';
 import { Package, User, Landmark, Zap } from 'lucide-react';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
 function App() {
   const [activeView, setActiveView] = useState<'sender' | 'distributor'>('sender');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -33,12 +35,12 @@ function App() {
 
     const checkWhatsAppStatus = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/status');
+        const res = await fetch(`${BACKEND_URL}/api/status`);
         const data = await res.json();
         setWaStatus(data.status);
 
         if (data.status === 'qr') {
-          const qrRes = await fetch('http://localhost:3001/api/qr');
+          const qrRes = await fetch(`${BACKEND_URL}/api/qr`);
           const qrData = await qrRes.json();
           setWaQrCode(qrData.qrCode);
         } else {
@@ -104,7 +106,7 @@ function App() {
     let waSent = false;
     if (waStatus === 'ready') {
       try {
-        const res = await fetch('http://localhost:3001/api/send-order', {
+        const res = await fetch(`${BACKEND_URL}/api/send-order`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -263,7 +265,7 @@ function App() {
               onRefresh={async () => {
                 setWaStatus('loading');
                 try {
-                  await fetch('http://localhost:3001/api/status');
+                  await fetch(`${BACKEND_URL}/api/status`);
                 } catch(e) {}
               }}
             />
