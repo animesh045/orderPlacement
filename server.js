@@ -170,4 +170,30 @@ app.post('/api/send-order', async (req, res) => {
 // Run Backend Express App
 app.listen(PORT, () => {
   console.log(`WhatsApp Web Automation Gateway listening on port ${PORT}`);
+
+  // Automatically start free public tunnel via local ngrok binary
+  try {
+    const ngrok = require('ngrok');
+    (async () => {
+      try {
+        const url = await ngrok.connect({
+          proto: 'http',
+          addr: PORT
+        });
+        console.log('\n==================================================');
+        console.log(`🚀 [NGROK] PUBLIC INTERNET TUNNEL LINK ACTIVATED!`);
+        console.log(`🔗 Connect Vercel to this URL:`);
+        console.log(`👉 ${url}`);
+        console.log('==================================================\n');
+      } catch (err) {
+        console.warn('\n⚠️  Could not start local Ngrok tunnel automatically.');
+        console.warn('To link Vercel to your laptop without cloud hosting, configure your free Ngrok Authtoken:');
+        console.warn('  1. Sign up for free on ngrok.com');
+        console.warn('  2. Run: npx ngrok config add-authtoken <YOUR_TOKEN>');
+        console.warn('  3. Re-run npm run dev to open the tunnel.\n');
+      }
+    })();
+  } catch (e) {
+    console.warn('ngrok package could not be initialized.', e.message);
+  }
 });
