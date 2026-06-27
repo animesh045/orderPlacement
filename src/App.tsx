@@ -12,7 +12,10 @@ import {
 import type { Order } from './types';
 import { Package, Zap } from 'lucide-react';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+// Green API credentials from environment/Vercel settings
+const ID_INSTANCE = import.meta.env.VITE_GREEN_API_ID_INSTANCE || '';
+const API_TOKEN_INSTANCE = import.meta.env.VITE_GREEN_API_TOKEN_INSTANCE || '';
+const isConfigured = !!(ID_INSTANCE && API_TOKEN_INSTANCE);
 
 function App() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -20,24 +23,37 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
 
-  // WhatsApp integration states
-  const [waStatus, setWaStatus] = useState<'loading' | 'qr' | 'ready' | 'disconnected'>('loading');
+  // WhatsApp integration states: starts loading if configured, or authorized for simulation
+  const [waStatus, setWaStatus] = useState<
+    'loading' | 'authorized' | 'notAuthorized' | 'sleepMode' | 'starting' | 'blocked' | 'disconnected'
+  >(isConfigured ? 'loading' : 'authorized');
   const [waQrCode, setWaQrCode] = useState<string | null>(null);
 
-  // Load orders and poll WhatsApp status
+  // Load orders and poll Green API status
   useEffect(() => {
     setOrders(getOrders());
 
+    if (!isConfigured) return;
+
     const checkWhatsAppStatus = async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/status`);
+        const res = await fetch(
+          `https://api.green-api.com/waInstance${ID_INSTANCE}/getStateInstance/${API_TOKEN_INSTANCE}`
+        );
         const data = await res.json();
-        setWaStatus(data.status);
+        const state = data.stateInstance; // "authorized" | "notAuthorized" | "sleepMode" | etc.
+        setWaStatus(state);
 
-        if (data.status === 'qr') {
-          const qrRes = await fetch(`${BACKEND_URL}/api/qr`);
+        if (state === 'notAuthorized') {
+          // Fetch QR Code
+          const qrRes = await fetch(
+            `https://api.green-api.com/waInstance${ID_INSTANCE}/qr/${API_TOKEN_INSTANCE}`
+          );
           const qrData = await qrRes.json();
-          setWaQrCode(qrData.qrCode);
+          if (qrData.type === 'qrCode') {
+            // Prepends standard PNG MIME header to the returned base64 string
+            setWaQrCode(`data:image/png;base64,${qrData.message}`);
+          }
         } else {
           setWaQrCode(null);
         }
@@ -48,7 +64,7 @@ function App() {
     };
 
     checkWhatsAppStatus();
-    const interval = setInterval(checkWhatsAppStatus, 4000);
+    const interval = setInterval(checkWhatsAppStatus, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -80,24 +96,31 @@ function App() {
     setOrders(getOrders());
     setPhotos([]); // Clear uploaded photos
 
-    // 2. Send via WhatsApp Web API
+    // 2. Dispatch via Green API (if keys are set and active)
     let waSent = false;
-    if (waStatus === 'ready') {
+    if (isConfigured && waStatus === 'authorized') {
       try {
         let sentCount = 0;
         for (let i = 0; i < newOrder.photos.length; i++) {
-          const res = await fetch(`${BACKEND_URL}/api/send-order`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              phone: orderData.phone,
-              photoData: newOrder.photos[i],
-              caption: caption,
-              orderId: `${orderId}-${i + 1}`
-            })
-          });
+          // Slice MIME prefix from base64 string
+          const base64Data = newOrder.photos[i].split(',')[1];
+          const recipientChatId = `${orderData.phone}@c.us`;
+
+          const res = await fetch(
+            `https://api.green-api.com/waInstance${ID_INSTANCE}/sendFileByBase64/${API_TOKEN_INSTANCE}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chatId: recipientChatId,
+                base64Data: base64Data,
+                fileName: `order_${orderId}_${i + 1}.jpg`,
+                caption: caption
+              })
+            }
+          );
           const apiData = await res.json();
-          if (apiData.success) {
+          if (apiData.idMessage) {
             sentCount++;
           }
         }
@@ -105,16 +128,18 @@ function App() {
           waSent = true;
         }
       } catch (err) {
-        console.error('Error sending order photo to WhatsApp backend:', err);
+        console.error('Green API error:', err);
       }
     }
 
     setIsSubmitting(false);
 
-    if (waSent) {
-      triggerNotification(`Order successfully sent via WhatsApp!`, 'success');
+    if (!isConfigured) {
+      triggerNotification(`Order ${orderId} saved locally (Simulation Mode).`, 'info');
+    } else if (waSent) {
+      triggerNotification(`Order ${orderId} sent automatically via WhatsApp!`, 'success');
     } else {
-      triggerNotification(`Order saved locally (WhatsApp offline/not linked).`, 'info');
+      triggerNotification(`Order saved locally (WhatsApp offline or linking pending).`, 'info');
     }
   };
 
@@ -131,7 +156,11 @@ function App() {
   };
 
   const handleResendOrder = async (order: Order) => {
-    if (waStatus !== 'ready') {
+    if (!isConfigured) {
+      triggerNotification('Setup Green API credentials to enable WhatsApp sending.', 'info');
+      return;
+    }
+    if (waStatus !== 'authorized') {
       triggerNotification('WhatsApp Gateway is offline. Link it first.', 'info');
       return;
     }
@@ -143,18 +172,24 @@ function App() {
 
     try {
       for (let i = 0; i < order.photos.length; i++) {
-        const res = await fetch(`${BACKEND_URL}/api/send-order`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: order.phone,
-            photoData: order.photos[i],
-            caption: caption,
-            orderId: `${order.id}-${i + 1}`
-          })
-        });
+        const base64Data = order.photos[i].split(',')[1];
+        const recipientChatId = `${order.phone}@c.us`;
+
+        const res = await fetch(
+          `https://api.green-api.com/waInstance${ID_INSTANCE}/sendFileByBase64/${API_TOKEN_INSTANCE}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chatId: recipientChatId,
+              base64Data: base64Data,
+              fileName: `order_${order.id}_${i + 1}.jpg`,
+              caption: caption
+            })
+          }
+        );
         const apiData = await res.json();
-        if (apiData.success) {
+        if (apiData.idMessage) {
           sentCount++;
         }
       }
@@ -217,12 +252,7 @@ function App() {
         <WhatsAppAuth 
           status={waStatus}
           qrCode={waQrCode}
-          onRefresh={async () => {
-            setWaStatus('loading');
-            try {
-              await fetch(`${BACKEND_URL}/api/status`);
-            } catch(e) {}
-          }}
+          mode={isConfigured ? 'official' : 'simulation'}
         />
 
         <div className="main-grid">
