@@ -51,10 +51,15 @@ import type { Party } from '../types';
 const PARTIES_KEY = 'ananya_order_placement_parties';
 
 const DEFAULT_PARTIES: Party[] = [
-  { id: '1', name: 'Apex Logistics', phone: '919876543210', phone2: '' },
-  { id: '2', name: 'SwiftCare Pharma', phone: '918888888888', phone2: '' },
-  { id: '3', name: 'Metro Foods', phone: '917777777777', phone2: '' }
+  { id: 'party-1142', name: 'Animesh', phone: '918368825928', phone2: '' },
+  { id: 'party-9884', name: 'Shri Jee Enterprises', phone: '919254074204', phone2: '' },
+  { id: 'party-2652', name: 'Shree Ji Combined', phone: '919254074204', phone2: '918287737088' },
+  { id: 'party-6985', name: 'Baidhyanath', phone: '919540449566', phone2: '' },
+  { id: 'party-2140', name: 'Dry Fruit', phone: '919050430807', phone2: '' },
+  { id: 'party-3663', name: 'Vedsun', phone: '918405067800', phone2: '' },
+  { id: 'party-1354', name: 'Radhey Radhey', phone: '919958448021', phone2: '919810883187' }
 ];
+
 
 export const getParties = (): Party[] => {
   const data = localStorage.getItem(PARTIES_KEY);

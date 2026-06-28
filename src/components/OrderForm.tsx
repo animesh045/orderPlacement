@@ -20,11 +20,15 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [selectedPartyId, setSelectedPartyId] = useState<string | 'custom'>('');
   const [customPhone, setCustomPhone] = useState('');
 
-  // Auto-select first party on load if available
+  // Auto-select first party on load, or reset if selected party is deleted/invalid
   useEffect(() => {
-    if (parties.length > 0 && selectedPartyId === '') {
-      setSelectedPartyId(parties[0].id);
-    } else if (parties.length === 0) {
+    if (parties.length > 0) {
+      if (selectedPartyId === '') {
+        setSelectedPartyId(parties[0].id);
+      } else if (selectedPartyId !== 'custom' && !parties.some(p => p.id === selectedPartyId)) {
+        setSelectedPartyId(parties[0].id);
+      }
+    } else {
       setSelectedPartyId('custom');
     }
   }, [parties, selectedPartyId]);
@@ -58,18 +62,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       onSubmit={handleSubmit} 
       className="glass-card animate-slideUp"
       style={{ 
-        padding: '16px', 
+        padding: '20px', 
         display: 'flex', 
         flexDirection: 'column', 
-        gap: '12px',
-        background: 'rgba(30, 41, 59, 0.5)'
+        gap: '16px',
+        background: 'rgba(15, 23, 42, 0.45)',
+        border: '1.5px solid rgba(255, 255, 255, 0.08)'
       }}
     >
       {/* Parties Selection Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span className="text-xs text-muted font-semibold flex items-center gap-1.5">
-          <Users size={13} />
-          Select Recipient Party:
+        <span className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-2">
+          <Users size={14} color="var(--primary)" />
+          Select Recipient Party
         </span>
         <button
           type="button"
@@ -79,7 +84,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             border: 'none',
             color: 'var(--primary)',
             cursor: 'pointer',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: '600',
             display: 'flex',
             alignItems: 'center',
@@ -89,62 +94,128 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           onMouseOver={(e) => e.currentTarget.style.color = 'var(--primary-hover)'}
           onMouseOut={(e) => e.currentTarget.style.color = 'var(--primary)'}
         >
-          <Settings size={12} />
+          <Settings size={13} />
           Configure Parties
         </button>
       </div>
 
       {/* Quick Select Party Grid */}
-      <div className="flex flex-wrap gap-2">
-        {parties.map((party) => (
-          <button
-            key={party.id}
-            type="button"
-            onClick={() => setSelectedPartyId(party.id)}
-            className="text-xs"
-            style={{
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: selectedPartyId === party.id ? 'var(--primary)' : 'rgba(255,255,255,0.03)',
-              color: selectedPartyId === party.id ? '#fff' : 'var(--text-secondary)',
-              padding: '6px 12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: '500',
-              transition: 'all 0.2s',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '2px'
-            }}
-          >
-            <span>{party.name}</span>
-            <span style={{ fontSize: '9px', opacity: 0.7 }}>
-              {party.phone2 ? '2 numbers' : '1 number'}
-            </span>
-          </button>
-        ))}
+      <div 
+        style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', 
+          gap: '8px'
+        }}
+      >
+        {parties.map((party) => {
+          const isSelected = selectedPartyId === party.id;
+          return (
+            <button
+              key={party.id}
+              type="button"
+              onClick={() => setSelectedPartyId(party.id)}
+              style={{
+                border: isSelected ? '1.5px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
+                background: isSelected 
+                  ? 'rgba(59, 130, 246, 0.12)' 
+                  : 'rgba(15, 23, 42, 0.45)',
+                color: isSelected ? '#fff' : 'var(--text-secondary)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                boxShadow: isSelected ? 'var(--shadow-glow), inset 0 0 10px rgba(59, 130, 246, 0.1)' : 'none',
+                transition: 'all 0.2s ease-in-out',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseOver={(e) => {
+                if (!isSelected) {
+                  e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                }
+              }}
+              onMouseOut={(e) => {
+                if (!isSelected) {
+                  e.currentTarget.style.background = 'rgba(15, 23, 42, 0.45)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                }
+              }}
+            >
+              <span className="text-xs font-semibold" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', width: '100%' }}>
+                {party.name}
+              </span>
+              <span 
+                style={{ 
+                  fontSize: '9px', 
+                  color: isSelected ? 'var(--primary)' : 'var(--text-muted)',
+                  fontWeight: '600',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}
+              >
+                {party.phone2 ? '👥 2 numbers' : '👤 1 number'}
+              </span>
+            </button>
+          );
+        })}
 
-        <button
-          type="button"
-          onClick={() => setSelectedPartyId('custom')}
-          className="text-xs"
-          style={{
-            border: '1px solid rgba(255,255,255,0.08)',
-            background: selectedPartyId === 'custom' ? 'var(--accent-purple)' : 'rgba(255,255,255,0.03)',
-            color: selectedPartyId === 'custom' ? '#fff' : 'var(--text-secondary)',
-            padding: '6px 12px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: '500',
-            transition: 'all 0.2s',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            justifyContent: 'center'
-          }}
-        >
-          Custom Number
-        </button>
+        {/* Custom Number Option */}
+        {(() => {
+          const isSelected = selectedPartyId === 'custom';
+          return (
+            <button
+              type="button"
+              onClick={() => setSelectedPartyId('custom')}
+              style={{
+                border: isSelected ? '1.5px solid var(--accent-purple)' : '1px solid rgba(255,255,255,0.08)',
+                background: isSelected 
+                  ? 'rgba(168, 85, 247, 0.12)' 
+                  : 'rgba(15, 23, 42, 0.45)',
+                color: isSelected ? '#fff' : 'var(--text-secondary)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: '4px',
+                boxShadow: isSelected ? '0 0 20px rgba(168, 85, 247, 0.25), inset 0 0 10px rgba(168, 85, 247, 0.1)' : 'none',
+                transition: 'all 0.2s ease-in-out',
+                height: '100%'
+              }}
+              onMouseOver={(e) => {
+                if (!isSelected) {
+                  e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                }
+              }}
+              onMouseOut={(e) => {
+                if (!isSelected) {
+                  e.currentTarget.style.background = 'rgba(15, 23, 42, 0.45)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                }
+              }}
+            >
+              <span className="text-xs font-semibold">Custom Number</span>
+              <span 
+                style={{ 
+                  fontSize: '9px', 
+                  color: isSelected ? 'var(--accent-purple)' : 'var(--text-muted)',
+                  fontWeight: '600',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}
+              >
+                ✏️ enter number
+              </span>
+            </button>
+          );
+        })()}
       </div>
 
       {/* Recipient Phone input (only if custom is selected) */}
@@ -179,21 +250,28 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           style={{ 
             fontSize: '12px', 
             background: 'rgba(0,0,0,0.15)', 
-            padding: '8px 12px', 
+            padding: '12px 14px', 
             borderRadius: 'var(--radius-sm)',
-            color: 'var(--text-secondary)'
+            color: 'var(--text-secondary)',
+            borderLeft: '3px solid var(--primary)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
           }}
         >
           {(() => {
             const p = parties.find(x => x.id === selectedPartyId);
             if (!p) return null;
             return (
-              <p>
-                Sending to: <strong>{p.name}</strong> 
-                <span className="font-mono text-xs block mt-1">
-                  📞 {p.phone} {p.phone2 ? ` &  📞 ${p.phone2}` : ''}
-                </span>
-              </p>
+              <>
+                <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                  Recipient Party: {p.name.trim()}
+                </div>
+                <div className="font-mono text-xs text-muted" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span>🟢 Primary WhatsApp: +{p.phone}</span>
+                  {p.phone2 && <span>🟢 Secondary WhatsApp: +{p.phone2}</span>}
+                </div>
+              </>
             );
           })()}
         </div>
@@ -227,4 +305,5 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     </form>
   );
 };
+
 
