@@ -27,6 +27,4 @@ dist-ssr
 .wwebjs_auth
 .wwebjs_cache
 
-# Environment variables
-.env
 
