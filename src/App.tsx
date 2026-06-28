@@ -15,6 +15,7 @@ import { Package, Zap } from 'lucide-react';
 // Green API credentials from environment/Vercel settings
 const ID_INSTANCE = import.meta.env.VITE_GREEN_API_ID_INSTANCE || '';
 const API_TOKEN_INSTANCE = import.meta.env.VITE_GREEN_API_TOKEN_INSTANCE || '';
+const API_URL = import.meta.env.VITE_GREEN_API_URL || 'https://api.green-api.com';
 const isConfigured = !!(ID_INSTANCE && API_TOKEN_INSTANCE);
 
 function App() {
@@ -38,7 +39,7 @@ function App() {
     const checkWhatsAppStatus = async () => {
       try {
         const res = await fetch(
-          `https://api.green-api.com/waInstance${ID_INSTANCE}/getStateInstance/${API_TOKEN_INSTANCE}`
+          `${API_URL}/waInstance${ID_INSTANCE}/getStateInstance/${API_TOKEN_INSTANCE}`
         );
         const data = await res.json();
         const state = data.stateInstance; // "authorized" | "notAuthorized" | "sleepMode" | etc.
@@ -47,7 +48,7 @@ function App() {
         if (state === 'notAuthorized') {
           // Fetch QR Code
           const qrRes = await fetch(
-            `https://api.green-api.com/waInstance${ID_INSTANCE}/qr/${API_TOKEN_INSTANCE}`
+            `${API_URL}/waInstance${ID_INSTANCE}/qr/${API_TOKEN_INSTANCE}`
           );
           const qrData = await qrRes.json();
           if (qrData.type === 'qrCode') {
@@ -107,7 +108,7 @@ function App() {
           const recipientChatId = `${orderData.phone}@c.us`;
 
           const res = await fetch(
-            `https://api.green-api.com/waInstance${ID_INSTANCE}/sendFileByBase64/${API_TOKEN_INSTANCE}`,
+            `${API_URL}/waInstance${ID_INSTANCE}/sendFileByBase64/${API_TOKEN_INSTANCE}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -176,7 +177,7 @@ function App() {
         const recipientChatId = `${order.phone}@c.us`;
 
         const res = await fetch(
-          `https://api.green-api.com/waInstance${ID_INSTANCE}/sendFileByBase64/${API_TOKEN_INSTANCE}`,
+          `${API_URL}/waInstance${ID_INSTANCE}/sendFileByBase64/${API_TOKEN_INSTANCE}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
