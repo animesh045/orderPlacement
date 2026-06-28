@@ -59,7 +59,14 @@ export const HistoryDashboard: React.FC<HistoryDashboardProps> = ({
                     })}
                   </span>
                   <div className="text-sm font-semibold mt-0.5">
-                    To: <span style={{ color: 'var(--primary)' }}>+{order.phone}</span>
+                    To: {order.partyName ? (
+                      <span>
+                        <strong>{order.partyName}</strong>{' '}
+                        <span className="text-xs text-muted font-normal">({order.phone.split(',').map(p => `+${p.trim()}`).join(', ')})</span>
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--primary)' }}>{order.phone.split(',').map(p => `+${p.trim()}`).join(', ')}</span>
+                    )}
                   </div>
                 </div>
 

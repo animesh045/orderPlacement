@@ -44,3 +44,46 @@ export const deleteOrder = (orderId: string): Order[] => {
   saveOrders(filtered);
   return filtered;
 };
+
+// --- PARTY STORAGE HELPERS ---
+import type { Party } from '../types';
+
+const PARTIES_KEY = 'ananya_order_placement_parties';
+
+const DEFAULT_PARTIES: Party[] = [
+  { id: '1', name: 'Apex Logistics', phone: '919876543210', phone2: '' },
+  { id: '2', name: 'SwiftCare Pharma', phone: '918888888888', phone2: '' },
+  { id: '3', name: 'Metro Foods', phone: '917777777777', phone2: '' }
+];
+
+export const getParties = (): Party[] => {
+  const data = localStorage.getItem(PARTIES_KEY);
+  if (!data) {
+    localStorage.setItem(PARTIES_KEY, JSON.stringify(DEFAULT_PARTIES));
+    return DEFAULT_PARTIES;
+  }
+  return JSON.parse(data);
+};
+
+export const saveParties = (parties: Party[]): void => {
+  localStorage.setItem(PARTIES_KEY, JSON.stringify(parties));
+};
+
+export const addParty = (party: Party): void => {
+  const parties = getParties();
+  parties.push(party);
+  saveParties(parties);
+};
+
+export const updateParty = (updatedParty: Party): void => {
+  const parties = getParties();
+  const updated = parties.map(p => p.id === updatedParty.id ? updatedParty : p);
+  saveParties(updated);
+};
+
+export const deleteParty = (partyId: string): void => {
+  const parties = getParties();
+  const filtered = parties.filter(p => p.id !== partyId);
+  saveParties(filtered);
+};
+

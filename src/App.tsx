@@ -3,13 +3,18 @@ import { CameraCapture } from './components/CameraCapture';
 import { OrderForm } from './components/OrderForm';
 import { HistoryDashboard } from './components/HistoryDashboard';
 import { WhatsAppAuth } from './components/WhatsAppAuth';
+import { ManagePartiesModal } from './components/ManagePartiesModal';
 import { 
   getOrders, 
   addOrder, 
   toggleOrderStatus, 
-  deleteOrder 
+  deleteOrder,
+  getParties,
+  addParty,
+  updateParty,
+  deleteParty
 } from './utils/storage';
-import type { Order } from './types';
+import type { Order, Party } from './types';
 import { Package, Zap } from 'lucide-react';
 
 // Green API credentials from environment/Vercel settings
@@ -21,8 +26,10 @@ const isConfigured = !!(ID_INSTANCE && API_TOKEN_INSTANCE);
 function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [parties, setParties] = useState<Party[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [isPartiesModalOpen, setIsPartiesModalOpen] = useState(false);
 
   // WhatsApp integration states: starts loading if configured, or authorized for simulation
   const [waStatus, setWaStatus] = useState<
@@ -30,9 +37,10 @@ function App() {
   >(isConfigured ? 'loading' : 'authorized');
   const [waQrCode, setWaQrCode] = useState<string | null>(null);
 
-  // Load orders and poll Green API status
+  // Load orders, parties, and poll Green API status
   useEffect(() => {
     setOrders(getOrders());
+    setParties(getParties());
 
     if (!isConfigured) return;
 
@@ -76,7 +84,29 @@ function App() {
     }, 4000);
   };
 
-  const handlePlaceOrder = async (orderData: { phone: string }) => {
+  const handleAddParty = (partyData: Omit<Party, 'id'>) => {
+    const newParty: Party = {
+      ...partyData,
+      id: `party-${Math.floor(1000 + Math.random() * 9000)}`
+    };
+    addParty(newParty);
+    setParties(getParties());
+    triggerNotification('New party added!', 'success');
+  };
+
+  const handleUpdateParty = (updatedParty: Party) => {
+    updateParty(updatedParty);
+    setParties(getParties());
+    triggerNotification('Party details updated!', 'success');
+  };
+
+  const handleDeleteParty = (partyId: string) => {
+    deleteParty(partyId);
+    setParties(getParties());
+    triggerNotification('Party deleted.', 'info');
+  };
+
+  const handlePlaceOrder = async (orderData: { phone: string; partyName?: string }) => {
     if (photos.length === 0) return;
     setIsSubmitting(true);
 
@@ -89,6 +119,7 @@ function App() {
       id: orderId,
       photos: [...photos],
       phone: orderData.phone,
+      partyName: orderData.partyName,
       status: 'pending',
       timestamp: new Date().toISOString()
     };
@@ -101,34 +132,42 @@ function App() {
     let waSent = false;
     if (isConfigured && waStatus === 'authorized') {
       try {
+        const phoneNumbers = orderData.phone.split(',');
         let sentCount = 0;
-        for (let i = 0; i < newOrder.photos.length; i++) {
-          const recipientChatId = `${orderData.phone}@c.us`;
-          const fileName = `order_${orderId}_${i + 1}.jpg`;
+        const totalMessages = newOrder.photos.length * phoneNumbers.length;
 
-          // Convert data URL to binary Blob
-          const blobRes = await fetch(newOrder.photos[i]);
-          const fileBlob = await blobRes.blob();
+        for (const phoneNum of phoneNumbers) {
+          const cleanNum = phoneNum.trim();
+          if (!cleanNum) continue;
 
-          const formData = new FormData();
-          formData.append('chatId', recipientChatId);
-          formData.append('file', fileBlob, fileName);
-          formData.append('fileName', fileName);
-          formData.append('caption', caption);
+          const recipientChatId = `${cleanNum}@c.us`;
+          for (let i = 0; i < newOrder.photos.length; i++) {
+            const fileName = `order_${orderId}_${i + 1}.jpg`;
 
-          const res = await fetch(
-            `${API_URL}/waInstance${ID_INSTANCE}/sendFileByUpload/${API_TOKEN_INSTANCE}`,
-            {
-              method: 'POST',
-              body: formData
+            // Convert data URL to binary Blob
+            const blobRes = await fetch(newOrder.photos[i]);
+            const fileBlob = await blobRes.blob();
+
+            const formData = new FormData();
+            formData.append('chatId', recipientChatId);
+            formData.append('file', fileBlob, fileName);
+            formData.append('fileName', fileName);
+            formData.append('caption', caption);
+
+            const res = await fetch(
+              `${API_URL}/waInstance${ID_INSTANCE}/sendFileByUpload/${API_TOKEN_INSTANCE}`,
+              {
+                method: 'POST',
+                body: formData
+              }
+            );
+            const apiData = await res.json();
+            if (apiData.idMessage) {
+              sentCount++;
             }
-          );
-          const apiData = await res.json();
-          if (apiData.idMessage) {
-            sentCount++;
           }
         }
-        if (sentCount === newOrder.photos.length) {
+        if (sentCount === totalMessages) {
           waSent = true;
         }
       } catch (err) {
@@ -175,42 +214,51 @@ function App() {
     const caption = `Ananya Enterprises - ${formattedDate}`;
 
     try {
-      for (let i = 0; i < order.photos.length; i++) {
-        const recipientChatId = `${order.phone}@c.us`;
-        const fileName = `order_${order.id}_${i + 1}.jpg`;
+      const phoneNumbers = order.phone.split(',');
+      const totalMessages = order.photos.length * phoneNumbers.length;
 
-        // Convert data URL to binary Blob
-        const blobRes = await fetch(order.photos[i]);
-        const fileBlob = await blobRes.blob();
+      for (const phoneNum of phoneNumbers) {
+        const cleanNum = phoneNum.trim();
+        if (!cleanNum) continue;
 
-        const formData = new FormData();
-        formData.append('chatId', recipientChatId);
-        formData.append('file', fileBlob, fileName);
-        formData.append('fileName', fileName);
-        formData.append('caption', caption);
+        const recipientChatId = `${cleanNum}@c.us`;
+        for (let i = 0; i < order.photos.length; i++) {
+          const fileName = `order_${order.id}_${i + 1}.jpg`;
 
-        const res = await fetch(
-          `${API_URL}/waInstance${ID_INSTANCE}/sendFileByUpload/${API_TOKEN_INSTANCE}`,
-          {
-            method: 'POST',
-            body: formData
+          // Convert data URL to binary Blob
+          const blobRes = await fetch(order.photos[i]);
+          const fileBlob = await blobRes.blob();
+
+          const formData = new FormData();
+          formData.append('chatId', recipientChatId);
+          formData.append('file', fileBlob, fileName);
+          formData.append('fileName', fileName);
+          formData.append('caption', caption);
+
+          const res = await fetch(
+            `${API_URL}/waInstance${ID_INSTANCE}/sendFileByUpload/${API_TOKEN_INSTANCE}`,
+            {
+              method: 'POST',
+              body: formData
+            }
+          );
+          const apiData = await res.json();
+          if (apiData.idMessage) {
+            sentCount++;
           }
-        );
-        const apiData = await res.json();
-        if (apiData.idMessage) {
-          sentCount++;
         }
+      }
+      if (sentCount === totalMessages) {
+        setIsSubmitting(false);
+        triggerNotification('Order resent successfully via WhatsApp!', 'success');
+        return;
       }
     } catch (err) {
       console.error(err);
     }
 
     setIsSubmitting(false);
-    if (sentCount === order.photos.length) {
-      triggerNotification('Order resent successfully via WhatsApp!', 'success');
-    } else {
-      triggerNotification('Resend failed or partially completed.', 'info');
-    }
+    triggerNotification('Resend failed or partially completed.', 'info');
   };
 
   return (
@@ -275,8 +323,10 @@ function App() {
             
             <OrderForm 
               photosCount={photos.length}
+              parties={parties}
               onSubmit={handlePlaceOrder}
               isSubmitting={isSubmitting}
+              onManagePartiesClick={() => setIsPartiesModalOpen(true)}
             />
           </div>
           
@@ -291,6 +341,16 @@ function App() {
           </div>
         </div>
       </main>
+
+      {/* Parties Management Modal */}
+      <ManagePartiesModal 
+        isOpen={isPartiesModalOpen}
+        onClose={() => setIsPartiesModalOpen(false)}
+        parties={parties}
+        onAddParty={handleAddParty}
+        onUpdateParty={handleUpdateParty}
+        onDeleteParty={handleDeleteParty}
+      />
 
       <footer className="text-center text-xs text-muted" style={{ marginTop: '32px', opacity: 0.5 }}>
         &copy; {new Date().getFullYear()} Ananya Enterprises OrderHub. Built for automated B2B order routing.
