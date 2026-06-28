@@ -103,21 +103,24 @@ function App() {
       try {
         let sentCount = 0;
         for (let i = 0; i < newOrder.photos.length; i++) {
-          // Slice MIME prefix from base64 string
-          const base64Data = newOrder.photos[i].split(',')[1];
           const recipientChatId = `${orderData.phone}@c.us`;
+          const fileName = `order_${orderId}_${i + 1}.jpg`;
+
+          // Convert data URL to binary Blob
+          const blobRes = await fetch(newOrder.photos[i]);
+          const fileBlob = await blobRes.blob();
+
+          const formData = new FormData();
+          formData.append('chatId', recipientChatId);
+          formData.append('file', fileBlob, fileName);
+          formData.append('fileName', fileName);
+          formData.append('caption', caption);
 
           const res = await fetch(
-            `${API_URL}/waInstance${ID_INSTANCE}/sendFileByBase64/${API_TOKEN_INSTANCE}`,
+            `${API_URL}/waInstance${ID_INSTANCE}/sendFileByUpload/${API_TOKEN_INSTANCE}`,
             {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chatId: recipientChatId,
-                base64Data: base64Data,
-                fileName: `order_${orderId}_${i + 1}.jpg`,
-                caption: caption
-              })
+              body: formData
             }
           );
           const apiData = await res.json();
@@ -173,20 +176,24 @@ function App() {
 
     try {
       for (let i = 0; i < order.photos.length; i++) {
-        const base64Data = order.photos[i].split(',')[1];
         const recipientChatId = `${order.phone}@c.us`;
+        const fileName = `order_${order.id}_${i + 1}.jpg`;
+
+        // Convert data URL to binary Blob
+        const blobRes = await fetch(order.photos[i]);
+        const fileBlob = await blobRes.blob();
+
+        const formData = new FormData();
+        formData.append('chatId', recipientChatId);
+        formData.append('file', fileBlob, fileName);
+        formData.append('fileName', fileName);
+        formData.append('caption', caption);
 
         const res = await fetch(
-          `${API_URL}/waInstance${ID_INSTANCE}/sendFileByBase64/${API_TOKEN_INSTANCE}`,
+          `${API_URL}/waInstance${ID_INSTANCE}/sendFileByUpload/${API_TOKEN_INSTANCE}`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chatId: recipientChatId,
-              base64Data: base64Data,
-              fileName: `order_${order.id}_${i + 1}.jpg`,
-              caption: caption
-            })
+            body: formData
           }
         );
         const apiData = await res.json();
