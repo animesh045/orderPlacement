@@ -23,6 +23,19 @@ const API_TOKEN_INSTANCE = import.meta.env.VITE_GREEN_API_TOKEN_INSTANCE || '';
 const API_URL = import.meta.env.VITE_GREEN_API_URL || 'https://api.green-api.com';
 const isConfigured = !!(ID_INSTANCE && API_TOKEN_INSTANCE);
 
+// Helper to convert base64 data URLs to Blobs (works on both laptop and mobile browsers)
+const dataURLtoBlob = (dataUrl: string): Blob => {
+  const parts = dataUrl.split(',');
+  const mime = parts[0].match(/:(.*?);/)![1];
+  const bstr = atob(parts[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+};
+
 function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -145,8 +158,7 @@ function App() {
             const fileName = `order_${orderId}_${i + 1}.jpg`;
 
             // Convert data URL to binary Blob
-            const blobRes = await fetch(newOrder.photos[i]);
-            const fileBlob = await blobRes.blob();
+            const fileBlob = dataURLtoBlob(newOrder.photos[i]);
 
             const formData = new FormData();
             formData.append('chatId', recipientChatId);
@@ -226,8 +238,7 @@ function App() {
           const fileName = `order_${order.id}_${i + 1}.jpg`;
 
           // Convert data URL to binary Blob
-          const blobRes = await fetch(order.photos[i]);
-          const fileBlob = await blobRes.blob();
+          const fileBlob = dataURLtoBlob(order.photos[i]);
 
           const formData = new FormData();
           formData.append('chatId', recipientChatId);
