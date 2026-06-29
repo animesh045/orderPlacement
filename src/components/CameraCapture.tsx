@@ -8,6 +8,71 @@ interface CameraCaptureProps {
   onClear: () => void;
 }
 
+// Helper function to compress large gallery images before saving/uploading to prevent memory issues and localStorage quota limit errors
+const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.75): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    // Only attempt to compress image files
+    if (!file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          resolve(event.target.result as string);
+        } else {
+          reject(new Error('Failed to read file'));
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Scale down to fit within maxWidth and maxHeight, preserving aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string); // Fallback to raw data URL if canvas context is unavailable
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // Output as jpeg with the specified quality compression
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedDataUrl);
+      };
+      img.onerror = (err) => {
+        reject(err);
+      };
+    };
+    reader.onerror = (err) => {
+      reject(err);
+    };
+  });
+};
+
 export const CameraCapture: React.FC<CameraCaptureProps> = ({
   photos,
   onAddPhoto,
@@ -66,20 +131,29 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
     stopCamera();
   };
 
-  // Handle local file uploads
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle local file uploads with compression to prevent localStorage quota errors and mobile memory issues
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
     
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          onAddPhoto(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    const fileArray = Array.from(files);
+    
+    for (const file of fileArray) {
+      try {
+        const compressedDataUrl = await compressImage(file);
+        onAddPhoto(compressedDataUrl);
+      } catch (err) {
+        console.error('Failed to compress image:', err);
+        // Fallback to reading file directly if compression fails
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            onAddPhoto(event.target.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
 
     // Reset input
     if (fileInputRef.current) {

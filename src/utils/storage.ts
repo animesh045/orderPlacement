@@ -13,7 +13,12 @@ export const getOrders = (): Order[] => {
 };
 
 export const saveOrders = (orders: Order[]): void => {
-  localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
+  try {
+    localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
+  } catch (error) {
+    console.error('Failed to save orders to localStorage:', error);
+    alert('Storage limit reached! Please delete some old orders to free up space.');
+  }
 };
 
 export const addOrder = (order: Order): void => {
